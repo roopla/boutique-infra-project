@@ -1,15 +1,13 @@
 pipeline {
-    agent any
-
-    environment {
-        GOOGLE_CREDENTIALS = credentials('gcp-service-account-key') // Jenkins ID of your GCP SA key
-        TF_VAR_project = 'playground-s-11-05c70481'   // replace with actual project ID
-        TF_VAR_region  = 'us-central1'
-        TF_VAR_zone    = 'us-central1-a'
+    agent {
+        label 'terraform-slave' // Make sure your Jenkins slave has this label
     }
 
-    parameters {
-        choice(name: 'ACTION', choices: ['init', 'plan', 'apply'], description: 'Terraform action to perform')
+    environment {
+        GOOGLE_CREDENTIALS = credentials('gcp-service-account-key') // Jenkins credential ID for GCP SA key
+        TF_VAR_project = 'playground-s-11-05c70481'   // Replace with actual GCP project
+        TF_VAR_region  = 'us-central1'
+        TF_VAR_zone    = 'us-central1-a'
     }
 
     options {
@@ -20,15 +18,12 @@ pipeline {
     stages {
         stage('Checkout') {
             steps {
-                echo 'Cloning boutique-infra-project repo...'
+                echo 'Cloning repo...'
                 git url: 'https://github.com/roopla/boutique-infra-project.git', branch: 'main'
             }
         }
 
         stage('Terraform Init') {
-            when {
-                expression { params.ACTION == 'init' || params.ACTION == 'plan' || params.ACTION == 'apply' }
-            }
             steps {
                 withCredentials([file(credentialsId: 'gcp-service-account-key', variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
                     sh '''
@@ -40,9 +35,6 @@ pipeline {
         }
 
         stage('Terraform Plan') {
-            when {
-                expression { params.ACTION == 'plan' || params.ACTION == 'apply' }
-            }
             steps {
                 sh '''
                 terraform plan -input=false -out=tfplan
@@ -51,9 +43,6 @@ pipeline {
         }
 
         stage('Terraform Apply') {
-            when {
-                expression { params.ACTION == 'apply' }
-            }
             steps {
                 input message: 'Approve Apply?'
                 sh '''
@@ -65,10 +54,10 @@ pipeline {
 
     post {
         failure {
-            echo 'Pipeline failed — investigate logs.'
+            echo 'Pipeline failed — check console output.'
         }
         success {
-            echo 'Terraform pipeline completed successfully.'
+            echo '✅ Terraform apply completed successfully.'
         }
     }
 }
