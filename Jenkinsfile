@@ -1,7 +1,5 @@
 pipeline {
-    agent {
-        label 'terraform-slave' // Make sure your Jenkins slave has this label
-    }
+    agent any
 
     environment {
         GOOGLE_CREDENTIALS = credentials('gcp-service-account-key') // Jenkins credential ID for GCP SA key
