@@ -1,103 +1,74 @@
 pipeline {
     agent any
 
-    parameters {
-        choice(
-            name: 'ACTION',
-            choices: ['plan', 'apply', 'destroy'],
-            description: 'Select Terraform action to perform'
-        )
+    environment {
+        GOOGLE_CREDENTIALS = credentials('gcp-service-account-key') // Jenkins ID of your GCP SA key
+        TF_VAR_project = 'playground-s-11-05c70481'   // replace with actual project ID
+        TF_VAR_region  = 'us-central1'
+        TF_VAR_zone    = 'us-central1-a'
     }
 
-    environment {
-        // GCP service account key stored in Jenkins Credentials as secret file
-        GOOGLE_CREDENTIALS = credentials('gcp-service-account-key')
+    parameters {
+        choice(name: 'ACTION', choices: ['init', 'plan', 'apply'], description: 'Terraform action to perform')
     }
 
     options {
         skipStagesAfterUnstable()
+        timeout(time: 15, unit: 'MINUTES')
     }
 
     stages {
-        stage('Init-State') {
+        stage('Checkout') {
             steps {
-                script {
-                    echo "Initializing Terraform..."
-                    sh '''
-                        export GOOGLE_APPLICATION_CREDENTIALS=$GOOGLE_CREDENTIALS
-                        terraform init -input=false
-                    '''
-                }
+                echo 'Cloning boutique-infra-project repo...'
+                git url: 'https://github.com/roopla/boutique-infra-project.git', branch: 'main'
             }
         }
 
-        stage('Plan-Stage') {
+        stage('Terraform Init') {
             when {
-                expression { params.ACTION == 'plan' }
+                expression { params.ACTION == 'init' || params.ACTION == 'plan' || params.ACTION == 'apply' }
             }
             steps {
-                script {
-                    echo "Running terraform plan..."
+                withCredentials([file(credentialsId: 'gcp-service-account-key', variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
                     sh '''
-                        export GOOGLE_APPLICATION_CREDENTIALS=$GOOGLE_CREDENTIALS
-                        terraform plan -var-file=terraform.tfvars -out=tfplan
+                    export GOOGLE_APPLICATION_CREDENTIALS=$GOOGLE_APPLICATION_CREDENTIALS
+                    terraform init -input=false
                     '''
                 }
             }
         }
 
-        stage('Apply-Stage') {
+        stage('Terraform Plan') {
+            when {
+                expression { params.ACTION == 'plan' || params.ACTION == 'apply' }
+            }
+            steps {
+                sh '''
+                terraform plan -input=false -out=tfplan
+                '''
+            }
+        }
+
+        stage('Terraform Apply') {
             when {
                 expression { params.ACTION == 'apply' }
             }
             steps {
-                script {
-                    def user = currentBuild.rawBuild.getCause(hudson.model.Cause$UserIdCause)?.getUserId()
-                    if (user != 'sivesre') {
-                        error("Access denied: Only user 'sivesre' is authorized to apply Terraform changes.")
-                    }
-                }
-                script {
-                    echo "Applying Terraform changes..."
-                    sh '''
-                        export GOOGLE_APPLICATION_CREDENTIALS=$GOOGLE_CREDENTIALS
-                        terraform apply -auto-approve tfplan
-                    '''
-                }
-            }
-        }
-
-        stage('Destroy-Stage') {
-            when {
-                expression { params.ACTION == 'destroy' }
-            }
-            steps {
-                script {
-                    def user = currentBuild.rawBuild.getCause(hudson.model.Cause$UserIdCause)?.getUserId()
-                    if (user != 'sivesre') {
-                        error("Access denied: Only user 'sivesre' is authorized to destroy infrastructure.")
-                    }
-                }
-                script {
-                    echo "Destroying Terraform-managed infrastructure..."
-                    sh '''
-                        export GOOGLE_APPLICATION_CREDENTIALS=$GOOGLE_CREDENTIALS
-                        terraform destroy -auto-approve -var-file=terraform.tfvars
-                    '''
-                }
+                input message: 'Approve Apply?'
+                sh '''
+                terraform apply -input=false tfplan
+                '''
             }
         }
     }
 
     post {
-        always {
-            echo "Terraform pipeline execution completed with action: ${params.ACTION}"
-        }
         failure {
-            echo "Pipeline failed during action: ${params.ACTION}"
+            echo 'Pipeline failed — investigate logs.'
         }
         success {
-            echo "Pipeline succeeded for action: ${params.ACTION}"
+            echo 'Terraform pipeline completed successfully.'
         }
     }
 }
