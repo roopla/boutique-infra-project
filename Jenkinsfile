@@ -9,8 +9,6 @@ pipeline {
         GOOGLE_CREDENTIALS = credentials('gcp-service-account-key')
     }
 
-   
-
     stages {
         stage('Fetching from git repo') {
             steps {
@@ -19,7 +17,7 @@ pipeline {
             }
         }
 
-        stage(' Init') {
+        stage('Init') {
             steps {
                 withCredentials([file(credentialsId: 'gcp-service-account-key', variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
                     sh '''
@@ -30,66 +28,64 @@ pipeline {
             }
         }
 
-        stage(' Plan') {
+        stage('Plan') {
             when {
                 expression { return !params.DESTROY }
             }
             steps {
                 withCredentials([file(credentialsId: 'tfvars-file', variable: 'TFVARS_FILE')]) {
                     writeFile file: 'jenkins.tfvars', text: "${TFVARS_FILE}"
-                    sh 'terraform plan -input=false -var-file=$TFVARS_FILE'
+                    sh 'terraform plan -input=false -var-file=jenkins.tfvars'
                 }
             }
         }
 
-        stage(' Apply') {
-    when {
-        expression { return !params.DESTROY }
-    }
-    steps {
-        script {
-            def userInput = input(
-                id: 'ApplyApproval',
-                message: 'Approve Apply?',
-                ok: 'Proceed'
-            )
+        stage('Apply') {
+            when {
+                expression { return !params.DESTROY }
+            }
+            steps {
+                script {
+                    def userInput = input(
+                        id: 'ApplyApproval',
+                        message: 'Approve Apply?',
+                        ok: 'Proceed'
+                    )
+                    def approvedBy = currentBuild.rawBuild.getCause(hudson.model.Cause$UserIdCause)?.userId
+                    if (approvedBy != 'sivesre') {
+                        error "Only 'sivesre' is authorized to approve Apply. Approved by: ${approvedBy}"
+                    }
+                }
 
-            def approvedBy = currentBuild.rawBuild.getAction(hudson.model.Cause$UserIdCause)?.userId
-            if (approvedBy != 'sivesre') {
-                error "Only 'sivesre' is authorized to approve Apply. Approved by: ${approvedBy}"
+                withCredentials([file(credentialsId: 'tfvars-file', variable: 'TFVARS_FILE')]) {
+                    sh 'terraform apply -input=false -auto-approve -var-file=jenkins.tfvars'
+                }
             }
         }
 
-        withCredentials([file(credentialsId: 'tfvars-file', variable: 'TFVARS_FILE')]) {
-            sh 'terraform apply -input=false -auto-approve -var-file=$TFVARS_FILE'
-        }
-    }
-}
+        stage('Destroy') {
+            when {
+                expression { return params.DESTROY }
+            }
+            steps {
+                script {
+                    def userInput = input(
+                        id: 'DestroyApproval',
+                        message: 'Approve Destroy? This will delete all provisioned infrastructure.',
+                        ok: 'Destroy'
+                    )
+                    def approvedBy = currentBuild.rawBuild.getCause(hudson.model.Cause$UserIdCause)?.userId
+                    if (approvedBy != 'sivesre') {
+                        error "Only 'sivesre' is authorized to approve Destroy. Approved by: ${approvedBy}"
+                    }
+                }
 
-
-      stage(' Destroy') {
-    when {
-        expression { return params.DESTROY }
-    }
-    steps {
-        script {
-            def userInput = input(
-                id: 'DestroyApproval',
-                message: 'Approve Destroy? This will delete all provisioned infrastructure.',
-                ok: 'Destroy'
-            )
-
-            def approvedBy = currentBuild.rawBuild.getAction(hudson.model.Cause$UserIdCause)?.userId
-            if (approvedBy != 'sivesre') {
-                error "Only 'sivesre' is authorized to approve Destroy. Approved by: ${approvedBy}"
+                withCredentials([file(credentialsId: 'tfvars-file', variable: 'TFVARS_FILE')]) {
+                    sh 'terraform destroy -input=false -auto-approve -var-file=jenkins.tfvars'
+                }
             }
         }
-
-        withCredentials([file(credentialsId: 'tfvars-file', variable: 'TFVARS_FILE')]) {
-            sh 'terraform destroy -input=false -auto-approve -var-file=$TFVARS_FILE'
-        }
     }
-}
 
     post {
         always {
@@ -97,10 +93,10 @@ pipeline {
             sh 'rm -f jenkins.tfvars || true'
         }
         failure {
-            echo 'failed.'
+            echo 'Pipeline failed.'
         }
         success {
-            echo 'success'
+            echo 'Pipeline succeeded.'
         }
     }
 }
