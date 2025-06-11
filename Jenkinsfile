@@ -3,9 +3,17 @@ pipeline {
 
     environment {
         GOOGLE_CREDENTIALS = credentials('gcp-service-account-key') // Jenkins credential ID for GCP SA key
-        TF_VAR_project = 'playground-s-11-05c70481'   // Replace with actual GCP project
-        TF_VAR_region  = 'us-central1'
-        TF_VAR_zone    = 'us-central1-a'
+        
+
+        // Terraform input variables passed as TF_VAR_* environment variables
+    TF_VAR_project_id     = 'playground-s-11-05c70481'
+    TF_VAR_region         = 'us-central1'
+    TF_VAR_vpc_name       = 'vpc-playground'
+    TF_VAR_subnet_name    = 'subnet-playground'
+    TF_VAR_subnet_cidr    = '10.9.0.0/16'
+    TF_VAR_vm_name        = 'vm-playground'
+    TF_VAR_machine_type   = 'e2-medium'
+    TF_VAR_zone           = 'us-central1-a
     }
 
     options {
