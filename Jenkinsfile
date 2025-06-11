@@ -2,33 +2,33 @@ pipeline {
     agent any
 
     parameters {
-        booleanParam(name: 'DESTROY', defaultValue: false, description: 'Check to destroy infrastructure instead of applying')
+        booleanParam(name: 'DESTROY', defaultValue: false, description: 'Destroy infrastructure if checked')
     }
 
     environment {
-        GOOGLE_CREDENTIALS      = credentials('gcp-service-account-key')
+        GOOGLE_CREDENTIALS = credentials('gcp-service-account-key')
     }
 
     stages {
-        stage('Fetching from git repo') {
+        stage('Checkout Repo') {
             steps {
-                echo 'Cloning repo...'
+                echo 'Checking out code...'
                 git url: 'https://github.com/roopla/boutique-infra-project.git', branch: 'main'
             }
         }
 
-        stage('Init') {
+        stage('Terraform Init') {
             steps {
                 withCredentials([file(credentialsId: 'gcp-service-account-key', variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
                     sh '''
-                    export GOOGLE_APPLICATION_CREDENTIALS=$GOOGLE_APPLICATION_CREDENTIALS
-                    terraform init -input=false
+                        export GOOGLE_APPLICATION_CREDENTIALS=$GOOGLE_APPLICATION_CREDENTIALS
+                        terraform init -input=false
                     '''
                 }
             }
         }
 
-        stage('Plan') {
+        stage('Terraform Plan') {
             when {
                 expression { return !params.DESTROY }
             }
@@ -40,54 +40,33 @@ pipeline {
             }
         }
 
-        stage('Apply') {
+        stage('Terraform Apply') {
             when {
                 expression { return !params.DESTROY }
             }
             steps {
-                script {
-                    input(
-                        id: 'ApplyApproval',
-                        message: 'Approve Apply?',
-                        ok: 'Proceed'
-                    )
-
-                    def approvedBy = currentBuild.rawBuild.getCause(hudson.model.Cause$UserIdCause)?.userId
-                    if (approvedBy != 'sivesre') {
-                        error "Only 'sivesre' is authorized to approve Apply. Approved by: ${approvedBy}"
-                    }
-                }
-
+                input message: 'Approve Apply?', ok: 'Apply', submitter: 'sivesre'
                 withCredentials([file(credentialsId: 'tfvars-file', variable: 'TFVARS_FILE')]) {
                     sh 'terraform apply -input=false -auto-approve -var-file=${TFVARS_FILE}'
                 }
             }
         }
 
-        stage('Destroy') {
+        stage('Terraform Destroy') {
             when {
                 expression { return params.DESTROY }
             }
             steps {
-                script {
-                    input(
-                        id: 'DestroyApproval',
-                        message: 'Approve Destroy? This will delete all  infra.',
-                        ok: 'Destroy'
-                    )
-
-                    def approvedBy = currentBuild.rawBuild.getCause(hudson.model.Cause$UserIdCause)?.userId
-                    if (approvedBy != 'sivesre') {
-                        error "Only 'sivesre' is authorized to approve Destroy. Approved by: ${approvedBy}"
-                    }
-                }
-
+                input message: 'Approve Destroy?', ok: 'Destroy', submitter: 'sivesre'
                 withCredentials([file(credentialsId: 'tfvars-file', variable: 'TFVARS_FILE')]) {
                     sh 'terraform destroy -input=false -auto-approve -var-file=${TFVARS_FILE}'
                 }
             }
         }
     }
+
+   
+
 
     post {
         always {
