@@ -35,8 +35,8 @@ pipeline {
                 expression { return !params.DESTROY }
             }
             steps {
-                withCredentials([string(credentialsId: 'tfvars-content', variable: 'TFVARS_TEXT')]) {
-                    writeFile file: 'jenkins.tfvars', text: "${TFVARS_TEXT}"
+                withCredentials([file(credentialsId: 'tfvars-file', variable: 'TFVARS_FILE')]) {
+                    writeFile file: 'jenkins.tfvars', text: "${TFVARS_FILE}"
                     sh 'terraform plan -input=false -var-file=jenkins.tfvars'
                 }
             }
@@ -48,8 +48,8 @@ pipeline {
             }
             steps {
                 input message: 'Approve Apply?'
-                withCredentials([string(credentialsId: 'tfvars-content', variable: 'TFVARS_TEXT')]) {
-                    writeFile file: 'jenkins.tfvars', text: "${TFVARS_TEXT}"
+                withCredentials([file(credentialsId: 'tfvars-file', variable: 'TFVARS_FILE')]) {
+                    writeFile file: 'jenkins.tfvars', text: "${TFVARS_FILE}"
                     sh 'terraform apply -input=false -auto-approve -var-file=jenkins.tfvars'
                 }
             }
@@ -61,8 +61,8 @@ pipeline {
             }
             steps {
                 input message: 'Approve Destroy? This will delete all provisioned infrastructure.'
-                withCredentials([string(credentialsId: 'tfvars-content', variable: 'TFVARS_TEXT')]) {
-                    writeFile file: 'jenkins.tfvars', text: "${TFVARS_TEXT}"
+               withCredentials([file(credentialsId: 'tfvars-file', variable: 'TFVARS_FILE')]) {
+                    writeFile file: 'jenkins.tfvars', text: "${TFVARS_FILE}"
                     sh 'terraform destroy -input=false -auto-approve -var-file=jenkins.tfvars'
                 }
             }
