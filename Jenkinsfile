@@ -40,52 +40,46 @@ pipeline {
             }
         }
 
-        stage('Apply') {
-            when {
-                expression { return !params.DESTROY }
-            }
-            steps {
-                script {
-                    def userInput = input(
-                        id: 'ApplyApproval',
-                        message: 'Approve Apply?',
-                        ok: 'Proceed'
-                    )
-                    def approvedBy = currentBuild.rawBuild.getCause(hudson.model.Cause$UserIdCause)?.userId
-                    if (approvedBy != 'sivesre') {
-                        error "Only 'sivesre' is authorized to approve Apply. Approved by: ${approvedBy}"
-                    }
-                }
-
-                withCredentials([file(credentialsId: 'tfvars-file', variable: 'TFVARS_FILE')]) {
-                    sh 'terraform apply -input=false -auto-approve -var-file=${TFVARS_FILE}'
-                }
-            }
+  stage('Apply') {
+    when {
+        expression { return !params.DESTROY }
+    }
+    steps {
+        script {
+            input(
+                id: 'ApplyApproval',
+                message: 'Approve Apply?',
+                ok: 'Proceed',
+                submitter: 'sivesre'
+            )
         }
 
-        stage('Destroy') {
-            when {
-                expression { return params.DESTROY }
-            }
-            steps {
-                script {
-                    def userInput = input(
-                        id: 'DestroyApproval',
-                        message: 'Approve Destroy? This will delete all provisioned infrastructure.',
-                        ok: 'Destroy'
-                    )
-                    def approvedBy = currentBuild.rawBuild.getCause(hudson.model.Cause$UserIdCause)?.userId
-                    if (approvedBy != 'sivesre') {
-                        error "Only 'sivesre' is authorized to approve Destroy. Approved by: ${approvedBy}"
-                    }
-                }
-
-                withCredentials([file(credentialsId: 'tfvars-file', variable: 'TFVARS_FILE')]) {
-                    sh 'terraform destroy -input=false -auto-approve -var-file=${TFVARS_FILE}'
-                }
-            }
+        withCredentials([file(credentialsId: 'tfvars-file', variable: 'TFVARS_FILE')]) {
+            sh 'terraform apply -input=false -auto-approve -var-file=$TFVARS_FILE'
         }
     }
+}
+
+stage('Destroy') {
+    when {
+        expression { return params.DESTROY }
+    }
+    steps {
+        script {
+            input(
+                id: 'DestroyApproval',
+                message: 'Approve Destroy? This will delete all provisioned infrastructure.',
+                ok: 'Destroy',
+                submitter: 'sivesre'
+            )
+        }
+
+        withCredentials([file(credentialsId: 'tfvars-file', variable: 'TFVARS_FILE')]) {
+            sh 'terraform destroy -input=false -auto-approve -var-file=$TFVARS_FILE'
+        }
+    }
+}
+
 
     post {
         always {
