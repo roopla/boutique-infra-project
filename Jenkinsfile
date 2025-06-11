@@ -2,22 +2,20 @@ pipeline {
     agent any
 
     parameters {
-        booleanParam(name: 'DESTROY', defaultValue: false, description: 'Select to destroy all infra')
+        booleanParam(name: 'DESTROY', defaultValue: false, description: 'Check this to destroy all infra')
     }
-    
-    environment {
-        GOOGLE_CREDENTIALS = credentials('gcp-service-account-key') // Jenkins credential ID for GCP SA key
-        
 
-        // Terraform input variables passed as TF_VAR_* environment variables
-    TF_VAR_project_id     = 'playground-s-11-05c70481'
-    TF_VAR_region         = 'us-central1'
-    TF_VAR_vpc_name       = 'vpc-playground'
-    TF_VAR_subnet_name    = 'subnet-playground'
-    TF_VAR_subnet_cidr    = '10.9.0.0/16'
-    TF_VAR_vm_name        = 'vm-playground'
-    TF_VAR_machine_type   = 'e2-medium'
-    TF_VAR_zone           = 'us-central1-a'
+    environment {
+        GOOGLE_CREDENTIALS = credentials('gcp-service-account-key')
+
+        TF_VAR_project_id     = 'playground-s-11-05c70481'
+        TF_VAR_region         = 'us-central1'
+        TF_VAR_zone           = 'us-central1-a'
+        TF_VAR_vpc_name       = 'vpc-playground'
+        TF_VAR_subnet_name    = 'subnet-playground'
+        TF_VAR_subnet_cidr    = '10.9.0.0/16'
+        TF_VAR_vm_name        = 'vm-playground'
+        TF_VAR_machine_type   = 'e2-medium'
     }
 
     options {
@@ -45,29 +43,41 @@ pipeline {
         }
 
         stage('Terraform Plan') {
+            when {
+                expression { return !params.DESTROY }
+            }
             steps {
-                sh '''
-                terraform plan -input=false -out=tfplan
-                '''
+                sh 'terraform plan -input=false -out=tfplan'
             }
         }
 
         stage('Terraform Apply') {
+            when {
+                expression { return !params.DESTROY }
+            }
             steps {
                 input message: 'Approve Apply?'
-                sh '''
-                terraform apply -input=false tfplan
-                '''
+                sh 'terraform apply -input=false tfplan'
+            }
+        }
+
+        stage('Terraform Destroy') {
+            when {
+                expression { return params.DESTROY }
+            }
+            steps {
+                input message: 'Approve Destroy? This will delete all provisioned infrastructure.'
+                sh 'terraform destroy -auto-approve'
             }
         }
     }
 
     post {
         failure {
-            echo 'Pipeline failed — check console output.'
+            echo '❌ Terraform pipeline failed — check logs.'
         }
         success {
-            echo '✅ Terraform apply completed successfully.'
+            echo '✅ Terraform pipeline completed.'
         }
     }
 }
