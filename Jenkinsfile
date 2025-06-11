@@ -2,36 +2,24 @@ pipeline {
     agent any
 
     parameters {
-        booleanParam(name: 'DESTROY', defaultValue: false, description: 'Check this to destroy all infra')
+        booleanParam(name: 'DESTROY', defaultValue: false, description: 'Check to destroy infrastructure instead of applying')
     }
 
     environment {
         GOOGLE_CREDENTIALS = credentials('gcp-service-account-key')
-
-        TF_VAR_project_id     = 'playground-s-11-05c70481'
-        TF_VAR_region         = 'us-central1'
-        TF_VAR_zone           = 'us-central1-a'
-        TF_VAR_vpc_name       = 'vpc-playground'
-        TF_VAR_subnet_name    = 'subnet-playground'
-        TF_VAR_subnet_cidr    = '10.9.0.0/16'
-        TF_VAR_vm_name        = 'vm-playground'
-        TF_VAR_machine_type   = 'e2-medium'
     }
 
-    options {
-        skipStagesAfterUnstable()
-        timeout(time: 15, unit: 'MINUTES')
-    }
+   
 
     stages {
-        stage('Checkout') {
+        stage('Fetching from git repo') {
             steps {
                 echo 'Cloning repo...'
                 git url: 'https://github.com/roopla/boutique-infra-project.git', branch: 'main'
             }
         }
 
-        stage('Terraform Init') {
+        stage(' Init') {
             steps {
                 withCredentials([file(credentialsId: 'gcp-service-account-key', variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
                     sh '''
@@ -42,42 +30,60 @@ pipeline {
             }
         }
 
-        stage('Terraform Plan') {
+        stage(' Plan') {
             when {
                 expression { return !params.DESTROY }
             }
             steps {
-                sh 'terraform plan -input=false -out=tfplan'
+                withCredentials([string(credentialsId: 'tfvars-content', variable: 'TFVARS_TEXT')]) {
+                    writeFile file: 'jenkins.tfvars', text: "${TFVARS_TEXT}"
+                    sh 'terraform plan -input=false -var-file=jenkins.tfvars'
+                }
             }
         }
 
-        stage('Terraform Apply') {
+        stage('Apply') {
             when {
                 expression { return !params.DESTROY }
             }
             steps {
                 input message: 'Approve Apply?'
-                sh 'terraform apply -input=false tfplan'
+                withCredentials([string(credentialsId: 'tfvars-content', variable: 'TFVARS_TEXT')]) {
+                    writeFile file: 'jenkins.tfvars', text: "${TFVARS_TEXT}"
+                    sh 'terraform apply -input=false -auto-approve -var-file=jenkins.tfvars'
+                }
             }
         }
 
-        stage('Terraform Destroy') {
+        stage('Destroy') {
             when {
                 expression { return params.DESTROY }
             }
             steps {
                 input message: 'Approve Destroy? This will delete all provisioned infrastructure.'
-                sh 'terraform destroy -auto-approve'
+                withCredentials([string(credentialsId: 'tfvars-content', variable: 'TFVARS_TEXT')]) {
+                    writeFile file: 'jenkins.tfvars', text: "${TFVARS_TEXT}"
+                    sh 'terraform destroy -input=false -auto-approve -var-file=jenkins.tfvars'
+                }
             }
         }
     }
 
     post {
+        always {
+            echo 'Cleaning up...'
+            sh 'rm -f jenkins.tfvars || true'
+        }
         failure {
-            echo '❌ Terraform pipeline failed — check logs.'
+            echo 'failed.'
         }
         success {
-            echo '✅ Terraform pipeline completed.'
+            echo 'success'
         }
     }
 }
+
+
+
+
+
