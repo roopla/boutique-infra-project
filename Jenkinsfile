@@ -6,40 +6,41 @@ pipeline {
     }
 
     environment {
-        GOOGLE_CREDENTIALS = credentials('gcp-service-account-key')
+        GOOGLE_CREDENTIALS      = credentials('gcp-service-account-key')
     }
 
     stages {
-        stage('Clone Repo') {
+        stage('Fetching from git repo') {
             steps {
-                echo 'Cloning repository...'
+                echo 'Cloning repo...'
                 git url: 'https://github.com/roopla/boutique-infra-project.git', branch: 'main'
             }
         }
 
-        stage('Terraform Init') {
+        stage('Init') {
             steps {
                 withCredentials([file(credentialsId: 'gcp-service-account-key', variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
                     sh '''
-                        export GOOGLE_APPLICATION_CREDENTIALS=$GOOGLE_APPLICATION_CREDENTIALS
-                        terraform init -input=false
+                    export GOOGLE_APPLICATION_CREDENTIALS=$GOOGLE_APPLICATION_CREDENTIALS
+                    terraform init -input=false
                     '''
                 }
             }
         }
 
-        stage('Terraform Plan') {
+        stage('Plan') {
             when {
                 expression { return !params.DESTROY }
             }
             steps {
                 withCredentials([file(credentialsId: 'tfvars-file', variable: 'TFVARS_FILE')]) {
-                    sh 'terraform plan -input=false -var-file=$TFVARS_FILE'
+                    writeFile file: 'jenkins.tfvars', text: "${TFVARS_FILE}"
+                    sh 'terraform plan -input=false -var-file=jenkins.tfvars'
                 }
             }
         }
 
-        stage('Terraform Apply') {
+        stage('Apply') {
             when {
                 expression { return !params.DESTROY }
             }
@@ -48,18 +49,22 @@ pipeline {
                     input(
                         id: 'ApplyApproval',
                         message: 'Approve Apply?',
-                        ok: 'Proceed',
-                        submitter: 'sivesre'
+                        ok: 'Proceed'
                     )
+
+                    def approvedBy = currentBuild.rawBuild.getCause(hudson.model.Cause$UserIdCause)?.userId
+                    if (approvedBy != 'sivesre') {
+                        error "Only 'sivesre' is authorized to approve Apply. Approved by: ${approvedBy}"
+                    }
                 }
 
                 withCredentials([file(credentialsId: 'tfvars-file', variable: 'TFVARS_FILE')]) {
-                    sh 'terraform apply -input=false -auto-approve -var-file=$TFVARS_FILE'
+                    sh 'terraform apply -input=false -auto-approve -var-file=jenkins.tfvars'
                 }
             }
         }
 
-        stage('Terraform Destroy') {
+        stage('Destroy') {
             when {
                 expression { return params.DESTROY }
             }
@@ -68,13 +73,17 @@ pipeline {
                     input(
                         id: 'DestroyApproval',
                         message: 'Approve Destroy? This will delete all provisioned infrastructure.',
-                        ok: 'Destroy',
-                        submitter: 'sivesre'
+                        ok: 'Destroy'
                     )
+
+                    def approvedBy = currentBuild.rawBuild.getCause(hudson.model.Cause$UserIdCause)?.userId
+                    if (approvedBy != 'sivesre') {
+                        error "Only 'sivesre' is authorized to approve Destroy. Approved by: ${approvedBy}"
+                    }
                 }
 
                 withCredentials([file(credentialsId: 'tfvars-file', variable: 'TFVARS_FILE')]) {
-                    sh 'terraform destroy -input=false -auto-approve -var-file=$TFVARS_FILE'
+                    sh 'terraform destroy -input=false -auto-approve -var-file=jenkins.tfvars'
                 }
             }
         }
