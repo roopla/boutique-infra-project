@@ -1,6 +1,10 @@
 pipeline {
     agent any
 
+    parameters {
+        booleanParam(name: 'DESTROY', defaultValue: false, description: 'Select to destroy all infra')
+    }
+    
     environment {
         GOOGLE_CREDENTIALS = credentials('gcp-service-account-key') // Jenkins credential ID for GCP SA key
         
