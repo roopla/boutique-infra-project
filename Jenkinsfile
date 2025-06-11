@@ -10,76 +10,75 @@ pipeline {
     }
 
     stages {
-        stage('Fetching from git repo') {
+        stage('Clone Repo') {
             steps {
-                echo 'Cloning repo...'
+                echo 'Cloning repository...'
                 git url: 'https://github.com/roopla/boutique-infra-project.git', branch: 'main'
             }
         }
 
-        stage('Init') {
+        stage('Terraform Init') {
             steps {
                 withCredentials([file(credentialsId: 'gcp-service-account-key', variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
                     sh '''
-                    export GOOGLE_APPLICATION_CREDENTIALS=$GOOGLE_APPLICATION_CREDENTIALS
-                    terraform init -input=false
+                        export GOOGLE_APPLICATION_CREDENTIALS=$GOOGLE_APPLICATION_CREDENTIALS
+                        terraform init -input=false
                     '''
                 }
             }
         }
 
-        stage('Plan') {
+        stage('Terraform Plan') {
             when {
                 expression { return !params.DESTROY }
             }
             steps {
                 withCredentials([file(credentialsId: 'tfvars-file', variable: 'TFVARS_FILE')]) {
-                    writeFile file: 'jenkins.tfvars', text: "${TFVARS_FILE}"
-                    sh 'terraform plan -input=false -var-file=${TFVARS_FILE}'
+                    sh 'terraform plan -input=false -var-file=$TFVARS_FILE'
                 }
             }
         }
 
-  stage('Apply') {
-    when {
-        expression { return !params.DESTROY }
-    }
-    steps {
-        script {
-            input(
-                id: 'ApplyApproval',
-                message: 'Approve Apply?',
-                ok: 'Proceed',
-                submitter: 'sivesre'
-            )
+        stage('Terraform Apply') {
+            when {
+                expression { return !params.DESTROY }
+            }
+            steps {
+                script {
+                    input(
+                        id: 'ApplyApproval',
+                        message: 'Approve Apply?',
+                        ok: 'Proceed',
+                        submitter: 'sivesre'
+                    )
+                }
+
+                withCredentials([file(credentialsId: 'tfvars-file', variable: 'TFVARS_FILE')]) {
+                    sh 'terraform apply -input=false -auto-approve -var-file=$TFVARS_FILE'
+                }
+            }
         }
 
-        withCredentials([file(credentialsId: 'tfvars-file', variable: 'TFVARS_FILE')]) {
-            sh 'terraform apply -input=false -auto-approve -var-file=$TFVARS_FILE'
+        stage('Terraform Destroy') {
+            when {
+                expression { return params.DESTROY }
+            }
+            steps {
+                script {
+                    input(
+                        id: 'DestroyApproval',
+                        message: 'Approve Destroy? This will delete all provisioned infrastructure.',
+                        ok: 'Destroy',
+                        submitter: 'sivesre'
+                    )
+                }
+
+                withCredentials([file(credentialsId: 'tfvars-file', variable: 'TFVARS_FILE')]) {
+                    sh 'terraform destroy -input=false -auto-approve -var-file=$TFVARS_FILE'
+                }
+            }
         }
     }
-}
-
-stage('Destroy') {
-    when {
-        expression { return params.DESTROY }
-    }
-    steps {
-        script {
-            input(
-                id: 'DestroyApproval',
-                message: 'Approve Destroy? This will delete all provisioned infrastructure.',
-                ok: 'Destroy',
-                submitter: 'sivesre'
-            )
-        }
-
-        withCredentials([file(credentialsId: 'tfvars-file', variable: 'TFVARS_FILE')]) {
-            sh 'terraform destroy -input=false -auto-approve -var-file=$TFVARS_FILE'
-        }
-    }
-}
-
 
     post {
         always {
