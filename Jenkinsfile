@@ -35,7 +35,7 @@ pipeline {
             steps {
                 withCredentials([file(credentialsId: 'tfvars-file', variable: 'TFVARS_FILE')]) {
                     writeFile file: 'jenkins.tfvars', text: "${TFVARS_FILE}"
-                    sh 'terraform plan -input=false -var-file=jenkins.tfvars'
+                    sh 'terraform plan -input=false -var-file=${TFVARS_FILE}'
                 }
             }
         }
@@ -58,7 +58,7 @@ pipeline {
                 }
 
                 withCredentials([file(credentialsId: 'tfvars-file', variable: 'TFVARS_FILE')]) {
-                    sh 'terraform apply -input=false -auto-approve -var-file=jenkins.tfvars'
+                    sh 'terraform apply -input=false -auto-approve -var-file=${TFVARS_FILE}'
                 }
             }
         }
@@ -81,7 +81,7 @@ pipeline {
                 }
 
                 withCredentials([file(credentialsId: 'tfvars-file', variable: 'TFVARS_FILE')]) {
-                    sh 'terraform destroy -input=false -auto-approve -var-file=jenkins.tfvars'
+                    sh 'terraform destroy -input=false -auto-approve -var-file=${TFVARS_FILE}'
                 }
             }
         }
