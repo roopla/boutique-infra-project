@@ -13,7 +13,7 @@ pipeline {
     TF_VAR_subnet_cidr    = '10.9.0.0/16'
     TF_VAR_vm_name        = 'vm-playground'
     TF_VAR_machine_type   = 'e2-medium'
-    TF_VAR_zone           = 'us-central1-a
+    TF_VAR_zone           = 'us-central1-a'
     }
 
     options {
