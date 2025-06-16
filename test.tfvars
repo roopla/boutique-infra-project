@@ -1,0 +1,8 @@
+project_id = "playground-s-11-05c70481"
+region = "us-central1"
+vpc_name = "test-vpc-playground"
+subnet_name = "test-subnet-playground"
+subnet_cidr = "10.7.0.0/16"
+vm_name = "test-vm-playground"   
+machine_type = "e2-medium"
+zone = "us-central1-a"  
