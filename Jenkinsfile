@@ -14,13 +14,30 @@ pipeline {
             description: 'Choose terraform workflow'
         )
     }
+
+    environment {
+        GCS_BUCKET = 'playground-s-11-4152b84f-tf'
+        GOOGLE_APPLICATION_CREDENTIALS = "${WORKSPACE}/gcp-key.json"
+    }
    
     stages {
+
+        stage ('setup GCE auth') {
+            steps {
+                withCredentials([file(credentialsId: 'gcp-service-account_key', variable: 'SA_KEY')]) {
+                    sh """
+                        cp ${SA_KEY} ${GOOGLE_APPLICATION_CREDENTIALS}  
+                        chmod 600 ${GOOGLE_APPLICATION_CREDENTIALS}
+                        
+                    """
+                }
+            }
+        }
         
         stage('init') {
             steps {
                 sh """
-                    terraform init -backend-config="bucket=playground-s-11-4152b84f-tf"  -backend-config="prefix=${params.ENVIRONMENT}"  
+                    terraform init -backend-config="bucket=${env.GCS_BUCKET}"  -backend-config="prefix=${params.ENVIRONMENT}"  
                 """
             }
         }
