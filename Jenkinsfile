@@ -10,7 +10,7 @@ pipeline {
         )
         choice(
             name: 'ACTION',
-            choices: "init\validate\nplan\napply\ndestroy",
+            choices: "init\nvalidate\nplan\napply\ndestroy",
             description: 'Choose terraform workflow'
         )
     }
