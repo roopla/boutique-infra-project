@@ -20,7 +20,7 @@ pipeline {
         stage('init') {
             steps {
                 sh """
-                    terraform init 
+                    terraform init -backend-config="bucket=playground-s-11-4152b84f-tf"  -backend-config="prefix=${params.ENVIRONMENT}"  
                 """
             }
         }
